@@ -16,13 +16,10 @@
 package org.redisson.rx;
 
 import io.reactivex.rxjava3.core.Flowable;
-import io.reactivex.rxjava3.functions.LongConsumer;
 import io.reactivex.rxjava3.processors.ReplayProcessor;
 import org.redisson.ScanResult;
 import org.redisson.api.RFuture;
 import org.redisson.client.RedisClient;
-
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 
@@ -34,62 +31,15 @@ public abstract class SetRxIterator<V> {
 
     public Flowable<V> create() {
         ReplayProcessor<V> p = ReplayProcessor.create();
-        return p.doOnRequest(new LongConsumer() {
-            
-            private String nextIterPos = "0";
-            private RedisClient client;
-            private AtomicLong elementsRead = new AtomicLong();
-            
-            private boolean finished;
-            private volatile boolean completed;
-            private AtomicLong readAmount = new AtomicLong();
-            
+        return p.doOnRequest(new RxIteratorConsumer<V>(p) {
             @Override
-            public void accept(long value) {
-                readAmount.addAndGet(value);
-                if (completed || elementsRead.get() == 0) {
-                    nextValues();
-                    completed = false;
-                }
+            protected boolean tryAgain() {
+                return SetRxIterator.this.tryAgain();
             }
-            
-            protected void nextValues() {
-                scanIterator(client, nextIterPos).whenComplete((res, e) -> {
-                    if (e != null) {
-                        p.onError(e);
-                        return;
-                    }
-                    
-                    if (finished) {
-                        client = null;
-                        nextIterPos = "0";
-                        return;
-                    }
 
-                    client = res.getRedisClient();
-                    nextIterPos = res.getPos();
-
-                    for (Object val : res.getValues()) {
-                        p.onNext((V) val);
-                        elementsRead.incrementAndGet();
-                    }
-                    
-                    if (elementsRead.get() >= readAmount.get()) {
-                        p.onComplete();
-                        elementsRead.set(0);
-                        completed = true;
-                        return;
-                    }
-                    if ("0".equals(res.getPos()) && !tryAgain()) {
-                        finished = true;
-                        p.onComplete();
-                    }
-                    
-                    if (finished || completed) {
-                        return;
-                    }
-                    nextValues();
-                });
+            @Override
+            protected RFuture<ScanResult<Object>> scanIterator(RedisClient client, String nextIterPos) {
+                return SetRxIterator.this.scanIterator(client, nextIterPos);
             }
         });
     }
