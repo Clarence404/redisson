@@ -315,8 +315,23 @@ public class RedissonListMultimap<K, V> extends RedissonMultimap<K, V> implement
     }
 
     @Override
+    Iterator<V> valuesIterator(int count) {
+        return new RedissonListMultimapIterator<K, V, V>(this, commandExecutor, codec, count) {
+            @Override
+            V getValue(V entry) {
+                return (V) entry;
+            }
+        };
+    }
+
+    @Override
     RedissonMultiMapIterator<K, V, Entry<K, V>> entryIterator() {
         return new RedissonListMultimapIterator<>(this, commandExecutor, codec);
+    }
+
+    @Override
+    RedissonMultiMapIterator<K, V, Entry<K, V>> entryIterator(int count) {
+        return new RedissonListMultimapIterator<>(this, commandExecutor, codec, count);
     }
 
     @Override

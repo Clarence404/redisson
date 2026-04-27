@@ -230,6 +230,11 @@ public class RedissonSetMultimap<K, V> extends RedissonMultimap<K, V> implements
     }
 
     @Override
+    public Set<Entry<K, V>> entries(int count) {
+        return (Set<Entry<K, V>>) super.entries(count);
+    }
+
+    @Override
     public Set<V> replaceValues(K key, Iterable<? extends V> values) {
         return (Set<V>) get(replaceValuesAsync(key, values));
     }
@@ -250,8 +255,23 @@ public class RedissonSetMultimap<K, V> extends RedissonMultimap<K, V> implements
     }
 
     @Override
+    Iterator<V> valuesIterator(int count) {
+        return new RedissonSetMultimapIterator<K, V, V>(RedissonSetMultimap.this, commandExecutor, codec, count) {
+            @Override
+            V getValue(V entry) {
+                return (V) entry;
+            }
+        };
+    }
+
+    @Override
     RedissonSetMultimapIterator<K, V, Entry<K, V>> entryIterator() {
         return new RedissonSetMultimapIterator<>(RedissonSetMultimap.this, commandExecutor, codec);
+    }
+
+    @Override
+    RedissonSetMultimapIterator<K, V, Entry<K, V>> entryIterator(int count) {
+        return new RedissonSetMultimapIterator<>(RedissonSetMultimap.this, commandExecutor, codec, count);
     }
 
     @Override

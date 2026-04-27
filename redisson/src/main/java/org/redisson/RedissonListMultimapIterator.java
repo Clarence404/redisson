@@ -26,8 +26,12 @@ public class RedissonListMultimapIterator<K, V, M> extends RedissonMultiMapItera
         super(map, commandExecutor, codec);
     }
 
+    public RedissonListMultimapIterator(RedissonMultimap<K, V> map, CommandAsyncExecutor commandExecutor, Codec codec, int count) {
+        super(map, commandExecutor, codec, count);
+    }
+
     @Override
-    protected Iterator<V> getIterator(String name) {
+    protected Iterator<V> getIterator(String name, int count) {
         RedissonList<V> set = new RedissonList<V>(codec, commandExecutor, map.getValuesName(name), null);
         return set.iterator();
     }

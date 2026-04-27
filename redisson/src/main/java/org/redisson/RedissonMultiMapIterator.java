@@ -54,11 +54,17 @@ abstract class RedissonMultiMapIterator<K, V, M> implements Iterator<M> {
 
     final CommandAsyncExecutor commandExecutor;
     final Codec codec;
+    final int count;
 
     RedissonMultiMapIterator(RedissonMultimap<K, V> map, CommandAsyncExecutor commandExecutor, Codec codec) {
+        this(map, commandExecutor, codec, 10);
+    }
+
+    RedissonMultiMapIterator(RedissonMultimap<K, V> map, CommandAsyncExecutor commandExecutor, Codec codec, int count) {
         this.map = map;
         this.commandExecutor = commandExecutor;
         this.codec = codec;
+        this.count = count;
     }
 
 
@@ -73,7 +79,7 @@ abstract class RedissonMultiMapIterator<K, V, M> implements Iterator<M> {
 
         while (true) {
             if (!keysFinished && (keysIter == null || !keysIter.hasNext())) {
-                MapScanResult<Object, Object> res = map.scanIterator(client, keysIterPos);
+                MapScanResult<Object, Object> res = map.scanIterator(client, keysIterPos, count);
                 client = res.getRedisClient();
                 keysIter = res.getMap().entrySet().iterator();
                 keysIterPos = res.getPos();
@@ -87,7 +93,7 @@ abstract class RedissonMultiMapIterator<K, V, M> implements Iterator<M> {
                 Entry<Object, Object> e = keysIter.next();
                 currentKey = (K) e.getKey();
                 String name = e.getValue().toString();
-                valuesIter = getIterator(name);
+                valuesIter = getIterator(name, count);
                 if (valuesIter.hasNext()) {
                     return true;
                 }
@@ -100,7 +106,7 @@ abstract class RedissonMultiMapIterator<K, V, M> implements Iterator<M> {
         }
     }
 
-    protected abstract Iterator<V> getIterator(String name);
+    protected abstract Iterator<V> getIterator(String name, int count);
 
     @Override
     public M next() {

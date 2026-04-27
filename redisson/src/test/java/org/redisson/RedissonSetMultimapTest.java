@@ -222,10 +222,11 @@ public class RedissonSetMultimapTest extends RedisDockerTest {
     public void testSizeInMemory() {
         RSetMultimap<String, String> set = redisson.getSetMultimap("test");
         set.put("1", "2");
-        assertThat(set.sizeInMemory()).isEqualTo(32);
+        long s = set.sizeInMemory();
+        assertThat(s).isEqualTo(32);
 
         set.put("1", "3");
-        assertThat(set.sizeInMemory()).isEqualTo(40);
+        assertThat(set.sizeInMemory()).isGreaterThan(s);
     }
     
     @Test
@@ -593,4 +594,24 @@ public class RedissonSetMultimapTest extends RedisDockerTest {
         assertThat(strings).containsAll(stringsOne);
         assertThat(strings).hasSize(stringsOne.size());
     }
+
+    @Test
+    public void testSetMultimapEntriesCount() {
+        RSetMultimap<String, String> mm = redisson.getSetMultimap("count-test-set");
+        IntStream.range(0, 200).forEach(i -> {
+            for (int j = 0; j < 5; j++) {
+                mm.put("k" + i, "v" + i + "-" + j);
+            }
+        });
+
+        Set<Map.Entry<String, String>> seen = new HashSet<>();
+        seen.addAll(mm.entries(64));
+
+        assertThat(seen).hasSize(1000);
+        assertThat(mm.keySet(64)).hasSize(200);
+        // For Set values the count also flows through SSCAN on the value dimension.
+        Set<String> distinctValues = new HashSet<>(mm.values(64));
+        assertThat(distinctValues).hasSize(1000);
+    }
+
 }

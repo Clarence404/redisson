@@ -80,6 +80,18 @@ public interface RSetMultimap<K, V> extends RMultimap<K, V> {
     Set<Map.Entry<K, V>> entries();
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Because a {@code RSetMultiMap} has unique values for a given key, this
+     * method returns a {@link Set}, instead of the {@link java.util.Collection}
+     * specified in the {@link RMultimap} interface.
+     */
+    @Override
+    default Set<Map.Entry<K, V>> entries(int count) {
+        return entries();
+    }
+
+    /**
      * Adds object event listener
      *
      * @see org.redisson.api.listener.MapPutListener

@@ -190,8 +190,18 @@ public abstract class RedissonMultimap<K, V> extends RedissonExpirable implement
     }
 
     @Override
+    public Set<K> keySet(int count) {
+        return new KeySet(count);
+    }
+
+    @Override
     public Collection<V> values() {
         return new Values();
+    }
+
+    @Override
+    public Collection<V> values(int count) {
+        return new Values(count);
     }
 
     @Override
@@ -212,6 +222,11 @@ public abstract class RedissonMultimap<K, V> extends RedissonExpirable implement
     @Override
     public Collection<Entry<K, V>> entries() {
         return new EntrySet();
+    }
+
+    @Override
+    public Collection<Entry<K, V>> entries(int count) {
+        return new EntrySet(count);
     }
 
     @Override
@@ -402,9 +417,10 @@ public abstract class RedissonMultimap<K, V> extends RedissonExpirable implement
         return commandExecutor.readAsync(getRawName(), LongCodec.INSTANCE, RedisCommands.HLEN, getRawName());
     }
     
-    
-    MapScanResult<Object, Object> scanIterator(RedisClient client, String startPos) {
-        RFuture<MapScanResult<Object, Object>> f = commandExecutor.readAsync(client, getRawName(), new CompositeCodec(codec, StringCodec.INSTANCE, codec), RedisCommands.HSCAN, getRawName(), startPos);
+    MapScanResult<Object, Object> scanIterator(RedisClient client, String startPos, int count) {
+        RFuture<MapScanResult<Object, Object>> f = commandExecutor.readAsync(client, getRawName(),
+                new CompositeCodec(codec, StringCodec.INSTANCE, codec),
+                RedisCommands.HSCAN, getRawName(), startPos, "COUNT", count);
         return get(f);
     }
 
@@ -412,7 +428,25 @@ public abstract class RedissonMultimap<K, V> extends RedissonExpirable implement
 
     abstract RedissonMultiMapIterator<K, V, Entry<K, V>> entryIterator();
 
+    Iterator<V> valuesIterator(int count) {
+        return valuesIterator();
+    }
+
+    RedissonMultiMapIterator<K, V, Entry<K, V>> entryIterator(int count) {
+        return entryIterator();
+    }
+
     final class KeySet extends AbstractSet<K> {
+
+        final int count;
+
+        KeySet() {
+            this(10);
+        }
+
+        KeySet(int count) {
+            this.count = count;
+        }
 
         @Override
         public Iterator<K> iterator() {
@@ -429,7 +463,7 @@ public abstract class RedissonMultimap<K, V> extends RedissonExpirable implement
 
                 @Override
                 protected ScanResult<Entry<Object, Object>> iterator(RedisClient client, String nextIterPos) {
-                    return RedissonMultimap.this.scanIterator(client, nextIterPos);
+                    return RedissonMultimap.this.scanIterator(client, nextIterPos, count);
                 }
 
                 @Override
@@ -465,9 +499,19 @@ public abstract class RedissonMultimap<K, V> extends RedissonExpirable implement
 
     final class Values extends AbstractCollection<V> {
 
+        private final int count;
+
+        Values() {
+            this(10);
+        }
+
+        Values(int count) {
+            this.count = count;
+        }
+
         @Override
         public Iterator<V> iterator() {
-            return valuesIterator();
+            return valuesIterator(count);
         }
 
         @Override
@@ -489,9 +533,19 @@ public abstract class RedissonMultimap<K, V> extends RedissonExpirable implement
 
     final class EntrySet extends AbstractSet<Map.Entry<K, V>> {
 
+        private final int count;
+
+        EntrySet() {
+            this(10);
+        }
+
+        EntrySet(int count) {
+            this.count = count;
+        }
+
         @Override
         public Iterator<Map.Entry<K, V>> iterator() {
-            return entryIterator();
+            return entryIterator(count);
         }
 
         @Override

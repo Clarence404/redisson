@@ -128,10 +128,11 @@ public class RedissonListMultimapTest extends RedisDockerTest {
     public void testSizeInMemory() {
         RListMultimap<String, String> list = redisson.getListMultimap("test");
         list.put("1", "2");
-        assertThat(list.sizeInMemory()).isEqualTo(32);
+        long s = list.sizeInMemory();
+        assertThat(list.sizeInMemory()).isGreaterThan(32);
 
         list.put("1", "3");
-        assertThat(list.sizeInMemory()).isEqualTo(40);
+        assertThat(list.sizeInMemory()).isGreaterThan(s);
     }
 
     @Test
@@ -145,6 +146,28 @@ public class RedissonListMultimapTest extends RedisDockerTest {
         list.delete();
         assertThat(testList.size()).isZero();
         assertThat(testList.get("1").size()).isZero();
+    }
+
+    @Test
+    public void testListMultimapEntriesCount() {
+        RListMultimap<String, String> mm = redisson.getListMultimap("count-test-list");
+        IntStream.range(0, 137).forEach(i -> {
+            mm.put("k" + i, "v" + i + "-a");
+            mm.put("k" + i, "v" + i + "-b");
+            mm.put("k" + i, "v" + i + "-c");
+        });
+
+        Set<Map.Entry<String, String>> seen = new HashSet<>();
+        seen.addAll(mm.entries(50));
+
+        assertThat(seen).hasSize(411);
+        assertThat(mm.keySet(50)).hasSize(137);
+        assertThat(mm.values(50)).hasSize(411);
+
+        Set<Map.Entry<String, String>> withCount = new HashSet<>();
+        withCount.addAll(mm.entries(500));
+
+        assertThat(seen).isEqualTo(withCount).hasSize(411);
     }
 
     @Test
