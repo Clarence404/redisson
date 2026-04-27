@@ -1,17 +1,20 @@
 package org.redisson.rx;
 
 import io.reactivex.rxjava3.core.Flowable;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RBucketRx;
 import org.redisson.api.RKeysRx;
 import org.redisson.api.RMapRx;
-import reactor.core.publisher.Flux;
+import org.redisson.api.options.KeysScanOptions;
+import org.redisson.client.codec.StringCodec;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -116,4 +119,29 @@ public class RedissonKeysRxTest extends BaseRxTest {
         s = sync(redisson.getKeys().expireAt(Instant.ofEpochMilli(ts), "expire-miss"));
         assertThat(s).isEqualTo(0);
     }
+
+    @Test
+    public void testGetKeysByPatternFull() {
+        int expected = 200;
+        for (int i = 0; i < expected; i++) {
+            redisson.getBucket("pattern-test:" + i, StringCodec.INSTANCE)
+                    .set(Integer.toString(i)).blockingAwait();
+        }
+
+        assertThat(redisson.getKeys().count().blockingGet()).isEqualTo(expected);
+
+        List<String> shareKeys = redisson.getKeys()
+                .getKeys(KeysScanOptions.defaults().pattern("pattern-test:*"))
+                .toList()
+                .blockingGet();
+
+        Map<String, Object> bucketMap = redisson
+                .getBuckets(StringCodec.INSTANCE)
+                .get(shareKeys.toArray(new String[0]))
+                .blockingGet();
+
+        assertThat(shareKeys).hasSize(expected);
+        assertThat(bucketMap).hasSize(expected);
+    }
+
 }

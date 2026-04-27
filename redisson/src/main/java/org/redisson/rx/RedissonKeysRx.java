@@ -17,6 +17,7 @@ package org.redisson.rx;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.reactivestreams.Publisher;
 import org.redisson.RedissonKeys;
@@ -75,56 +76,39 @@ public class RedissonKeysRx {
         return p.doOnRequest(new LongConsumer() {
 
             private RedisClient client;
-            private List<String> firstValues;
             private String nextIterPos = "0";
-            
-            private long currentIndex;
-            
+            private final AtomicLong requested = new AtomicLong();
+
             @Override
             public void accept(long value) {
-                currentIndex = value;
-                nextValues();
+                if (requested.addAndGet(value) == value) {
+                    nextValues();
+                }
             }
             
             private void nextValues() {
-                instance.scanIteratorAsync(client, entry, nextIterPos, pattern, count, type).whenComplete((res, e) -> {
-                    if (e != null) {
-                        p.onError(e);
-                        return;
-                    }
-                    
-                    client = res.getRedisClient();
-                    String prevIterPos = nextIterPos;
-                    if ("0".equals(nextIterPos) && firstValues == null) {
-                        firstValues = (List<String>) (Object) res.getValues();
-                    } else if (res.getValues().equals(firstValues)) {
-                        p.onComplete();
-                        currentIndex = 0;
-                        return;
-                    }
+                instance.scanIteratorAsync(client, entry, nextIterPos, pattern, count, type)
+                        .whenComplete((res, e) -> {
+                            if (e != null) {
+                                p.onError(e);
+                                return;
+                            }
 
-                    nextIterPos = res.getPos();
-                    if (prevIterPos.equals(nextIterPos)) {
-                        nextIterPos = "-1";
-                    }
-                    for (Object val : res.getValues()) {
-                        p.onNext((String) val);
-                        currentIndex--;
-                        if (currentIndex == 0) {
-                            p.onComplete();
-                            return;
-                        }
-                    }
-                    if ("-1".equals(nextIterPos)) {
-                        p.onComplete();
-                        currentIndex = 0;
-                    }
-                    
-                    if (currentIndex == 0) {
-                        return;
-                    }
-                    nextValues();
-                });
+                            client = res.getRedisClient();
+                            nextIterPos = res.getPos();
+
+                            for (Object val : res.getValues()) {
+                                p.onNext((String) val);
+                                requested.decrementAndGet();
+                            }
+
+                            if ("0".equals(nextIterPos)) {
+                                p.onComplete();
+                                return;
+                            }
+
+                            nextValues();
+                        });
             }
         });
     }
