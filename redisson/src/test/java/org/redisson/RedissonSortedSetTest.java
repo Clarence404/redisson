@@ -1,15 +1,7 @@
 package org.redisson;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -75,7 +67,7 @@ public class RedissonSortedSetTest extends RedisDockerTest {
         
         assertThat(set.readAll()).containsExactly(0L, 1L, 2L, 5L);
     }
-    
+
     @Test
     public void testReadAll() {
         RSortedSet<Integer> set = redisson.getSortedSet("simple");
@@ -546,4 +538,20 @@ public class RedissonSortedSetTest extends RedisDockerTest {
         await().atMost(5, TimeUnit.SECONDS).untilTrue(executed);
 
     }
+
+    @Test
+    public void testComparator() {
+        RSortedSet<Integer> set1 = redisson.getSortedSet("test");
+        set1.trySetComparator(Comparator.nullsFirst(Comparator.naturalOrder()));
+        set1.add(3);
+        set1.add(1);
+        set1.add(2);
+        assertThat(set1).containsExactly(1, 2, 3);
+
+        RSortedSet<Integer> set2 = redisson.getSortedSet("test");
+        set2.add(4);
+
+        assertThat(set2).containsExactly(1, 2, 3, 4);
+    }
+
 }

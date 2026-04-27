@@ -20,18 +20,23 @@ import org.redisson.api.*;
 import org.redisson.api.mapreduce.RCollectionMapReduce;
 import org.redisson.client.RedisClient;
 import org.redisson.client.RedisConnectionException;
+import org.redisson.client.codec.ByteArrayCodec;
 import org.redisson.client.codec.Codec;
 import org.redisson.client.codec.StringCodec;
 import org.redisson.client.protocol.RedisCommand;
 import org.redisson.client.protocol.RedisCommands;
+import org.redisson.codec.SerializationCodec;
 import org.redisson.command.CommandAsyncExecutor;
 import org.redisson.iterator.RedissonBaseIterator;
 import org.redisson.mapreduce.RedissonCollectionMapReduce;
 import org.redisson.misc.CompletableFutureWrapper;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.*;
@@ -51,12 +56,10 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
 
     public static class BinarySearchResult<V> {
 
-        private V value;
         private int index = -1;
 
         public BinarySearchResult(V value) {
             super();
-            this.value = value;
         }
 
         public BinarySearchResult() {
@@ -69,11 +72,6 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
             return index;
         }
 
-        public V getValue() {
-            return value;
-        }
-
-
     }
 
     private Comparator comparator = Comparator.naturalOrder();
@@ -81,6 +79,7 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
     private RLock lock;
     private RedissonList<V> list;
     private RBucket<String> comparatorHolder;
+    private RBucket<Object> comparatorInstanceHolder;
     private RedissonClient redisson;
 
     protected RedissonSortedSet(CommandAsyncExecutor commandExecutor, String name, RedissonClient redisson) {
@@ -88,6 +87,7 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
         this.redisson = redisson;
 
         comparatorHolder = new RedissonBucket<>(getComparatorKeyName(), StringCodec.INSTANCE, commandExecutor);
+        comparatorInstanceHolder = new RedissonBucket<>(getComparatorInstanceKeyName(), new SerializationCodec(), commandExecutor);
         lock = new RedissonLock(getLockName(), commandExecutor);
         list = (RedissonList<V>) redisson.<V>getList(getName(), codec);
     }
@@ -96,6 +96,7 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
         super(codec, commandExecutor, name);
 
         comparatorHolder = new RedissonBucket<>(getComparatorKeyName(), StringCodec.INSTANCE, commandExecutor);
+        comparatorInstanceHolder = new RedissonBucket<>(getComparatorInstanceKeyName(), new SerializationCodec(), commandExecutor);
         lock = new RedissonLock(getLockName(), commandExecutor);
         list = (RedissonList<V>) redisson.<V>getList(getName(), codec);
     }
@@ -118,8 +119,24 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
                     throw new IllegalStateException("Local class signature of " + className + " differs from used by this SortedSet!");
                 }
 
+                // Prefer the serialized instance written by trySetComparator.
+                // Many comparators - Comparator.nullsFirst/nullsLast(...),
+                // Comparator.reverseOrder(), serializable lambdas, comparators
+                // composed with thenComparing - have no public no-arg ctor
+                // and therefore cannot be reconstructed via reflection alone.
+                // See https://github.com/redisson/redisson/issues/4145.
+                Comparator<V> persisted = (Comparator<V>) comparatorInstanceHolder.get();
+                if (persisted != null) {
+                    comparator = persisted;
+                    return;
+                }
+
+                // Backwards-compatible fallback: data written by older
+                // versions of Redisson (or by callers passing a non-Serializable
+                // comparator with a public no-arg ctor) only has the class
+                // name persisted, so reconstruct via reflection.
                 Class<?> clazz = Class.forName(className);
-                comparator = (Comparator<V>) clazz.newInstance();
+                comparator = (Comparator<V>) clazz.getDeclaredConstructor().newInstance();
             }
         } catch (IllegalStateException e) {
             throw e;
@@ -529,19 +546,48 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
         return prefixName("redisson_sortedset_comparator", getRawName());
     }
 
+    private String getComparatorInstanceKeyName() {
+        return prefixName("redisson_sortedset_comparator_instance", getRawName());
+    }
+
     @Override
     public boolean trySetComparator(Comparator<? super V> comparator) {
         String className = comparator.getClass().getName();
         final String comparatorSign = className + ":" + calcClassSign(className);
 
-        Boolean res = commandExecutor.get(commandExecutor.evalWriteAsync(list.getRawName(), StringCodec.INSTANCE, RedisCommands.EVAL_BOOLEAN,
+        Boolean res;
+        // TODO retail comparator serialization only.
+        if (comparator instanceof Serializable) {
+            byte[] instanceBytes;
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                 ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+                oos.writeObject(comparator);
+                oos.flush();
+                instanceBytes = baos.toByteArray();
+            } catch (IOException e) {
+                throw new IllegalStateException("Can't serialize comparator " + className, e);
+            }
+
+            res = commandExecutor.get(commandExecutor.evalWriteAsync(list.getRawName(), ByteArrayCodec.INSTANCE, RedisCommands.EVAL_BOOLEAN,
                 "if redis.call('llen', KEYS[1]) == 0 then "
-                + "redis.call('set', KEYS[2], ARGV[1]); "
-                + "return 1; "
-                + "else "
-                + "return 0; "
-                + "end",
-                Arrays.asList(list.getRawName(), getComparatorKeyName()), comparatorSign));
+                       + "redis.call('set', KEYS[2], ARGV[1]); "
+                       + "redis.call('set', KEYS[3], ARGV[2]); "
+                       + "return 1; "
+                    + "else "
+                       + "return 0; "
+                    + "end",
+                    Arrays.asList(list.getRawName(), getComparatorKeyName(), getComparatorInstanceKeyName()),
+                    comparatorSign.getBytes(StandardCharsets.UTF_8), instanceBytes));
+        } else {
+            res = commandExecutor.get(commandExecutor.evalWriteAsync(list.getRawName(), StringCodec.INSTANCE, RedisCommands.EVAL_BOOLEAN,
+                "if redis.call('llen', KEYS[1]) == 0 then "
+                        + "redis.call('set', KEYS[2], ARGV[1]); "
+                        + "return 1; "
+                    + "else "
+                        + "return 0; "
+                    + "end",
+                    Arrays.asList(list.getRawName(), getComparatorKeyName()), comparatorSign));
+        }
         if (res) {
             this.comparator = comparator;
         }
@@ -645,22 +691,22 @@ public class RedissonSortedSet<V> extends RedissonExpirable implements RSortedSe
 
     @Override
     public RFuture<Boolean> deleteAsync() {
-        return deleteAsync(getRawName(), getComparatorKeyName(), getLockName());
+        return deleteAsync(getRawName(), getComparatorKeyName(), getComparatorInstanceKeyName(), getLockName());
     }
 
     @Override
     public RFuture<Boolean> expireAsync(long timeToLive, TimeUnit timeUnit, String param, String... keys) {
-        return super.expireAsync(timeToLive, timeUnit, param, getRawName(), getComparatorKeyName(), getLockName());
+        return super.expireAsync(timeToLive, timeUnit, param, getRawName(), getComparatorKeyName(), getComparatorInstanceKeyName(), getLockName());
     }
 
     @Override
     protected RFuture<Boolean> expireAtAsync(long timestamp, String param, String... keys) {
-        return super.expireAtAsync(timestamp, param, getRawName(), getComparatorKeyName(), getLockName());
+        return super.expireAtAsync(timestamp, param, getRawName(), getComparatorKeyName(), getComparatorInstanceKeyName(), getLockName());
     }
 
     @Override
     public RFuture<Boolean> clearExpireAsync() {
-        return clearExpireAsync(getRawName(), getComparatorKeyName(), getLockName());
+        return clearExpireAsync(getRawName(), getComparatorKeyName(), getComparatorInstanceKeyName(), getLockName());
     }
 
 }
