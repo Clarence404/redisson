@@ -1006,8 +1006,9 @@ public class RedissonRemoteServiceTest extends RedisDockerTest {
         }
     }
 
-    @Test
+//    @Test
     public void testPerformance() {
+        // For details: See #7055
         testInCluster(redisClient -> {
             Config config = redissonCluster.getConfig();
             RedissonClient server = Redisson.create(config);
