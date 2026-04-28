@@ -17,6 +17,7 @@ package org.redisson.api;
 
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Single;
+import org.redisson.api.ratelimiter.RateLimiterArgs;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -79,14 +80,14 @@ public interface RRateLimiterRx extends RExpirableRx {
     Single<Void> setRate(RateType mode, long rate, long rateInterval, RateIntervalUnit rateIntervalUnit);
 
     /**
-     * Sets the rate limit and keeps state by default.
+     * Updates the rate limit
      * <p>
-     * Use {@link RateLimiterSetRateArgs#of(RateType, long, Duration)} to construct arguments.
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
      *
      * @param args arguments object
-     * @return void
+     * @return {@code true} if update was applied
      */
-    Single<Void> setRate(RateLimiterSetRateArgs args);
+    Single<Boolean> updateRate(RateLimiterArgs args);
 
     /**
      * Sets the rate limit and clears the state.
@@ -96,7 +97,6 @@ public interface RRateLimiterRx extends RExpirableRx {
      * @param rate rate
      * @param rateInterval rate time interval
      */
-    @Deprecated
     Single<Void> setRate(RateType mode, long rate, Duration rateInterval);
 
     /**
@@ -108,7 +108,6 @@ public interface RRateLimiterRx extends RExpirableRx {
      * @param rateInterval rate time interval
      * @param keepAliveTime this is the maximum time that the limiter will wait for a new acquisition before deletion
      */
-    @Deprecated
     Single<Void> setRate(RateType mode, long rate, Duration rateInterval, Duration keepAliveTime);
 
     /**

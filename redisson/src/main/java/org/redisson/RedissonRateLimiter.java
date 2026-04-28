@@ -16,6 +16,8 @@
 package org.redisson;
 
 import org.redisson.api.*;
+import org.redisson.api.ratelimiter.RateLimiterArgs;
+import org.redisson.api.ratelimiter.RateLimiterParams;
 import org.redisson.client.codec.LongCodec;
 import org.redisson.client.codec.StringCodec;
 import org.redisson.client.handler.State;
@@ -412,23 +414,25 @@ public final class RedissonRateLimiter extends RedissonExpirable implements RRat
     }
 
     @Override
-    public void setRate(RateLimiterSetRateArgs args) {
-        get(setRateAsync(args));
-    }
-
-    @Override
     public RFuture<Void> setRateAsync(RateType mode, long rate, Duration rateInterval) {
         return setRateAsync(mode, rate, rateInterval, Duration.ZERO);
     }
 
     @Override
-    public RFuture<Void> setRateAsync(RateLimiterSetRateArgs args) {
-        if (!args.getKeepAliveTime().isZero() && args.getKeepAliveTime().toMillis() < args.getRateInterval().toMillis()) {
+    public boolean updateRate(RateLimiterArgs args) {
+        return get(updateRateAsync(args));
+    }
+
+    @Override
+    public RFuture<Boolean> updateRateAsync(RateLimiterArgs args) {
+        RateLimiterParams params = (RateLimiterParams) args;
+
+        if (!params.getKeepAliveTime().isZero() && params.getKeepAliveTime().toMillis() < params.getRateInterval().toMillis()) {
             throw new IllegalArgumentException("The parameter keepAliveTime should be greater than or equal to rateInterval");
         }
 
         long keepState = 0;
-        if (args.isKeepState()) {
+        if (params.isKeepState()) {
             keepState = 1;
         }
 
@@ -498,7 +502,7 @@ public final class RedissonRateLimiter extends RedissonExpirable implements RRat
               + "end; "
               + "return 1;",
                 Arrays.asList(getRawName(), getValueName(), getClientValueName(), getPermitsName(), getClientPermitsName()),
-                args.getRate(), args.getRateInterval().toMillis(), args.getMode().ordinal(), args.getKeepAliveTime().toMillis(),
+                params.getRate(), params.getRateInterval().toMillis(), params.getMode().ordinal(), params.getKeepAliveTime().toMillis(),
                 System.currentTimeMillis(), keepState);
     }
 

@@ -15,6 +15,8 @@
  */
 package org.redisson.api;
 
+import org.redisson.api.ratelimiter.RateLimiterArgs;
+
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
@@ -75,13 +77,14 @@ public interface RRateLimiter extends RRateLimiterAsync, RExpirable {
     void setRate(RateType mode, long rate, long rateInterval, RateIntervalUnit rateIntervalUnit);
 
     /**
-     * Sets the rate limit and keeps state by default.
+     * Updates the rate limit
      * <p>
-     * Use {@link RateLimiterSetRateArgs#of(RateType, long, Duration)} to construct arguments.
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
      *
      * @param args arguments object
+     * @return {@code true} if update was applied
      */
-    void setRate(RateLimiterSetRateArgs args);
+    boolean updateRate(RateLimiterArgs args);
 
     /**
      * Sets the rate limit and clears the state.
