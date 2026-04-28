@@ -1052,6 +1052,59 @@ public class RedissonMapCacheTest extends BaseMapTest {
     }
 
     @Test
+    public void testPutAllGetMaxIdle() throws InterruptedException {
+        RMapCache<SimpleKey, SimpleValue> map = redisson.getMapCache("simple06idle");
+        Assertions.assertNull(map.get(new SimpleKey("33")));
+        Assertions.assertNull(map.get(new SimpleKey("55")));
+
+        Map<SimpleKey, SimpleValue> entries = new HashMap<>();
+        entries.put(new SimpleKey("33"), new SimpleValue("44"));
+        entries.put(new SimpleKey("55"), new SimpleValue("66"));
+        map.putAll(entries, 0, null, 2, TimeUnit.SECONDS);
+
+        // alive immediately after putAll
+        Assertions.assertEquals(new SimpleValue("44"), map.get(new SimpleKey("33")));
+        Assertions.assertEquals(new SimpleValue("66"), map.get(new SimpleKey("55")));
+
+        // still alive within the idle window (the previous get() call refreshed it)
+        Thread.sleep(1000);
+        Assertions.assertEquals(new SimpleValue("44"), map.get(new SimpleKey("33")));
+        Assertions.assertEquals(new SimpleValue("66"), map.get(new SimpleKey("55")));
+
+        // expired after the idle window elapses with no further access
+        Thread.sleep(2500);
+        Assertions.assertNull(map.get(new SimpleKey("33")));
+        Assertions.assertNull(map.get(new SimpleKey("55")));
+        map.destroy();
+    }
+
+    @Test
+    public void testPutAllGetTTLAndMaxIdle() throws InterruptedException {
+        RMapCache<SimpleKey, SimpleValue> map = redisson.getMapCache("simple06ttlidle");
+
+        Map<SimpleKey, SimpleValue> entries = new HashMap<>();
+        entries.put(new SimpleKey("33"), new SimpleValue("44"));
+        entries.put(new SimpleKey("55"), new SimpleValue("66"));
+        // ttl is the shorter of the two windows, so it should determine expiration
+        // even when reads keep refreshing the idle window
+        map.putAll(entries, 2, TimeUnit.SECONDS, 10, TimeUnit.SECONDS);
+
+        Assertions.assertEquals(new SimpleValue("44"), map.get(new SimpleKey("33")));
+        Assertions.assertEquals(new SimpleValue("66"), map.get(new SimpleKey("55")));
+
+        // halfway through the TTL: reads refresh idle to ~11s out, but TTL is unaffected
+        Thread.sleep(1000);
+        Assertions.assertEquals(new SimpleValue("44"), map.get(new SimpleKey("33")));
+        Assertions.assertEquals(new SimpleValue("66"), map.get(new SimpleKey("55")));
+
+        // past the TTL window, both entries must be gone regardless of idle refreshes
+        Thread.sleep(1500);
+        Assertions.assertNull(map.get(new SimpleKey("33")));
+        Assertions.assertNull(map.get(new SimpleKey("55")));
+        map.destroy();
+    }
+
+    @Test
     public void testPutAllWithListener() throws InterruptedException {
         RMapCache<SimpleKey, SimpleValue> map = redisson.getMapCache("simple");
         SimpleEntryCreatedListener listener = new SimpleEntryCreatedListener();

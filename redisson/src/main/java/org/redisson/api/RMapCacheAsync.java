@@ -181,6 +181,28 @@ public interface RMapCacheAsync<K, V> extends RMapAsync<K, V> {
     RFuture<Void> putAllAsync(Map<? extends K, ? extends V> map, long ttl, TimeUnit ttlUnit);
 
     /**
+     * Associates the specified <code>value</code> with the specified <code>key</code>
+     * in batch.
+     * <p>
+     * If {@link MapWriter} is defined then new map entries are stored in write-through mode.
+     *
+     * @param map - mappings to be stored in this map
+     * @param ttl - time to live for all key\value entries.
+     *              If <code>0</code> then time to live doesn't affect entry expiration.
+     * @param ttlUnit - time unit
+     * @param maxIdleTime - max idle time for all key\value entries.
+     *              If <code>0</code> then max idle time doesn't affect entry expiration.
+     * @param maxIdleUnit - time unit
+     * <p>
+     * if <code>maxIdleTime</code> and <code>ttl</code> params are equal to <code>0</code>
+     * then entries store infinitely.
+     *
+     * @return void
+     */
+    RFuture<Void> putAllAsync(Map<? extends K, ? extends V> map, long ttl, TimeUnit ttlUnit,
+                              long maxIdleTime, TimeUnit maxIdleUnit);
+
+    /**
      * Stores value mapped by key with specified time to live.
      * Entry expires after specified time to live.
      * <p>

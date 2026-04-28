@@ -148,6 +148,12 @@ public class MapCacheNativeWrapper<K, V> implements RMapCache<K, V>, Supplier<RM
     }
 
     @Override
+    public void putAll(Map<? extends K, ? extends V> map, long ttl, TimeUnit ttlUnit,
+                       long maxIdleTime, TimeUnit maxIdleUnit) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public boolean updateEntryExpiration(K key, long ttl, TimeUnit ttlUnit, long maxIdleTime, TimeUnit maxIdleUnit) {
         throw new UnsupportedOperationException();
     }
@@ -270,6 +276,12 @@ public class MapCacheNativeWrapper<K, V> implements RMapCache<K, V>, Supplier<RM
     @Override
     public RFuture<Void> putAllAsync(Map<? extends K, ? extends V> map, long ttl, TimeUnit ttlUnit) {
         return cache.putAllAsync(map, Duration.ofMillis(ttlUnit.toMillis(ttl)));
+    }
+
+    @Override
+    public RFuture<Void> putAllAsync(Map<? extends K, ? extends V> map, long ttl, TimeUnit ttlUnit,
+                                     long maxIdleTime, TimeUnit maxIdleUnit) {
+        throw new UnsupportedOperationException();
     }
 
     // RMap methods
