@@ -15,6 +15,8 @@
  */
 package org.redisson.api;
 
+import org.redisson.api.ratelimiter.RateLimiterArgs;
+
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
@@ -75,6 +77,18 @@ public interface RRateLimiter extends RRateLimiterAsync, RExpirable {
     void setRate(RateType mode, long rate, long rateInterval, RateIntervalUnit rateIntervalUnit);
 
     /**
+     * Updates the rate limit, either resetting the current state or keeping it.
+     * <p>
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
+     *
+     * @param args arguments object
+     * @return {@code false} if the rate limiter has not been set or expired, {@code true} otherwise
+     */
+    boolean updateRate(RateLimiterArgs args);
+
+    /**
+     * Use {@link #setRate(RateLimiterArgs)} instead.
+     *
      * Sets the rate limit and clears the state.
      * Overrides both limit and state if they haven't been set before.
      *
@@ -82,7 +96,17 @@ public interface RRateLimiter extends RRateLimiterAsync, RExpirable {
      * @param rate rate
      * @param rateInterval rate time interval
      */
+    @Deprecated
     void setRate(RateType mode, long rate, Duration rateInterval);
+
+    /**
+     * Sets the rate limit, either resetting the current state or keeping it.
+     * <p>
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments. 
+     *
+     * @param args arguments object
+     */
+    void setRate(RateLimiterArgs args);
 
     /**
      * Sets time to live, the rate limit, and clears the state.
@@ -93,6 +117,7 @@ public interface RRateLimiter extends RRateLimiterAsync, RExpirable {
      * @param rateInterval rate time interval
      * @param keepAliveTime this is the maximum time that the limiter will wait for a new acquisition before deletion
      */
+    @Deprecated
     void setRate(RateType mode, long rate, Duration rateInterval, Duration keepAliveTime);
 
     /**

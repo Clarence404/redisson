@@ -17,6 +17,7 @@ package org.redisson.api;
 
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Single;
+import org.redisson.api.ratelimiter.RateLimiterArgs;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -79,6 +80,18 @@ public interface RRateLimiterRx extends RExpirableRx {
     Single<Void> setRate(RateType mode, long rate, long rateInterval, RateIntervalUnit rateIntervalUnit);
 
     /**
+     * Updates the rate limit, either resetting the current state or keeping it.
+     * <p>
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
+     *
+     * @param args arguments object
+     * @return {@code false} if the rate limiter has not been set or expired, {@code true} otherwise
+     */
+    Single<Boolean> updateRate(RateLimiterArgs args);
+
+    /**
+     * Use {@link #setRate(RateLimiterArgs)} instead
+     * 
      * Sets the rate limit and clears the state.
      * Overrides both limit and state if they haven't been set before.
      *
@@ -89,6 +102,8 @@ public interface RRateLimiterRx extends RExpirableRx {
     Single<Void> setRate(RateType mode, long rate, Duration rateInterval);
 
     /**
+     * Use {@link #setRate(RateLimiterArgs)} instead
+     * 
      * Sets time to live, the rate limit, and clears the state.
      * Overrides both limit and state if they haven't been set before.
      *
@@ -97,7 +112,17 @@ public interface RRateLimiterRx extends RExpirableRx {
      * @param rateInterval rate time interval
      * @param keepAliveTime this is the maximum time that the limiter will wait for a new acquisition before deletion
      */
+    @Deprecated
     Single<Void> setRate(RateType mode, long rate, Duration rateInterval, Duration keepAliveTime);
+
+    /**
+     * Sets the rate limit, either resetting the current state or keeping it.
+     * <p>
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
+     *
+     * @param args arguments object
+     */
+    Single<Void> setRate(RateLimiterArgs args);
 
     /**
      * Acquires a permit only if one is available at the

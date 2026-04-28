@@ -15,6 +15,8 @@
  */
 package org.redisson.api;
 
+import org.redisson.api.ratelimiter.RateLimiterArgs;
+
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
@@ -203,7 +205,7 @@ public interface RRateLimiterAsync extends RExpirableAsync {
     RFuture<Void> releaseAsync(long permits);
 
     /**
-     * Use {@link #setRateAsync(RateType, long, Duration)} instead
+     * Use {@link #setRateAsync(RateLimiterArgs)} instead
      *
      * @param mode rate mode
      * @param rate rate
@@ -216,6 +218,18 @@ public interface RRateLimiterAsync extends RExpirableAsync {
     RFuture<Void> setRateAsync(RateType mode, long rate, long rateInterval, RateIntervalUnit rateIntervalUnit);
 
     /**
+     * Updates the rate limit, either resetting the current state or keeping it.
+     * <p>
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
+     *
+     * @param args arguments object
+     * @return {@code false} if the rate limiter has not been set or expired, {@code true} otherwise
+     */
+    RFuture<Boolean> updateRateAsync(RateLimiterArgs args);
+
+    /**
+     * Use {@link #setRateAsync(RateLimiterArgs)} instead
+     * 
      * Sets the rate limit and clears the state.
      * Overrides both limit and state if they haven't been set before.
      *
@@ -223,7 +237,17 @@ public interface RRateLimiterAsync extends RExpirableAsync {
      * @param rate rate
      * @param rateInterval rate time interval
      */
+    @Deprecated
     RFuture<Void> setRateAsync(RateType mode, long rate, Duration rateInterval);
+
+    /**
+     * Sets the rate limit, either resetting the current state or keeping it.
+     * <p>
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
+     *
+     * @param args arguments object
+     */
+    RFuture<Void> setRateAsync(RateLimiterArgs args);
 
     /**
      * Sets time to live, the rate limit, and clears the state.

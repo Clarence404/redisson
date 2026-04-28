@@ -3,7 +3,7 @@ package org.redisson;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.redisson.api.*;
-import org.redisson.config.Config;
+import org.redisson.api.ratelimiter.RateLimiterArgs;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -188,7 +188,7 @@ public class RedissonRateLimiterTest extends RedisDockerTest {
         assertThat(rr.tryAcquire(1, 1, TimeUnit.SECONDS)).isFalse();
         assertThat(rr.tryAcquire()).isFalse();
     }
-    
+
     @Test
     public void testAcquire() {
         RRateLimiter rr = redisson.getRateLimiter("acquire");
@@ -306,12 +306,12 @@ public class RedissonRateLimiterTest extends RedisDockerTest {
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
-                        
+
                     }
                 }
             });
         }
-        
+
         pool.shutdown();
         assertThat(pool.awaitTermination(1, TimeUnit.MINUTES)).isTrue();
         
@@ -366,6 +366,199 @@ public class RedissonRateLimiterTest extends RedisDockerTest {
 
         //clean all keys in test
         redisson.getKeys().deleteByPattern("*test_change_rate*");
+    }
+
+    @Test
+    public void testSetStateArgs() throws InterruptedException {
+        String name = "testSetStateArgs";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(1)).keepState(true));
+        rr.acquire(3);
+        assertThat(rr.availablePermits()).isEqualTo(7);
+
+        Thread.sleep(1100);
+
+        rr.acquire(3);
+        assertThat(rr.availablePermits()).isEqualTo(7);
+    }
+
+    @Test
+    public void testSetStateArgsKeepState() {
+        String name = "testSetStateArgsKeepState";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true));
+        rr.acquire(3);
+        assertThat(rr.availablePermits()).isEqualTo(7);
+
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 20, Duration.ofSeconds(5)).keepState(true));
+        assertThat(rr.availablePermits()).isEqualTo(17);
+    }
+
+    @Test
+    public void testSetStateArgsNotKeepState() {
+        String name = "testSetStateArgsNotKeepState";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true));
+        rr.acquire(3);
+        assertThat(rr.availablePermits()).isEqualTo(7);
+
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 20, Duration.ofSeconds(5)));
+        assertThat(rr.availablePermits()).isEqualTo(20);
+    }
+
+    @Test
+    public void testUpdateRateNonExisting() {
+        String name = "testUpdateRateNonExisting";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true))).isFalse();
+        assertThat(rr.isExists()).isFalse();
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.PER_CLIENT, 10, Duration.ofSeconds(5)).keepState(true))).isFalse();
+        assertThat(rr.isExists()).isFalse();
+    }
+
+    @Test
+    public void testUpdateRateKeepsState() {
+        String name = "testUpdateRateKeepsState";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true));
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true))).isTrue();
+        assertThat(rr.availablePermits()).isEqualTo(10);
+
+        rr.acquire(2);
+        assertThat(rr.availablePermits()).isEqualTo(8);
+
+        assertThat(rr.tryAcquire(10)).isFalse();
+        assertThat(rr.tryAcquire(8)).isTrue();
+    }
+
+    @Test
+    public void testUpdateRateHigherRate() throws InterruptedException {
+        String name = "testUpdateRateExistingKeyHigherRate";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(2)).keepState(true));
+
+        Thread.sleep(1000);
+
+        rr.acquire(4); // used=4
+        assertThat(rr.availablePermits()).isEqualTo(6);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 20, Duration.ofSeconds(5)).keepState(true))).isTrue();
+        // newValue = 20 - used(4) = 16
+        assertThat(rr.availablePermits()).isEqualTo(16);
+
+        assertThat(rr.tryAcquire(16)).isTrue();
+    }
+
+    @Test
+    public void testUpdateRateLowerRateNewValuePositive() throws InterruptedException {
+        String name = "testUpdateRateLowerRateNewValuePositive";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(2)).keepState(true));
+
+        Thread.sleep(1000);
+
+        rr.acquire(3); // used=3
+        assertThat(rr.availablePermits()).isEqualTo(7);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 5, Duration.ofSeconds(5)).keepState(true))).isTrue();
+        // newValue = 5 - used(3) = 2
+        assertThat(rr.availablePermits()).isEqualTo(2);
+
+        assertThat(rr.tryAcquire(3)).isFalse();
+        assertThat(rr.tryAcquire(2)).isTrue();
+    }
+
+    @Test
+    public void testUpdateRateLowerRateNewValueNegative() throws InterruptedException {
+        String name = "testUpdateRateLowerRateNewValueNegative";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(2)).keepState(true));
+
+        Thread.sleep(1000);
+
+        rr.acquire(8); // used=8
+        assertThat(rr.availablePermits()).isEqualTo(2);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 5, Duration.ofSeconds(5)).keepState(true))).isTrue();
+        // newValue = 5 - used(8) = -3 => 0
+        assertThat(rr.availablePermits()).isEqualTo(0);
+
+        assertThat(rr.tryAcquire(1)).isFalse();
+        assertThat(rr.tryAcquire(2)).isFalse();
+    }
+
+
+    @Test
+    public void testUpdateRatePermitResetFull() throws InterruptedException {
+        String name = "testUpdateRatePermitResetFull";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(1)).keepState(true));
+
+        rr.acquire(8); // used=8
+        assertThat(rr.availablePermits()).isEqualTo(2);
+
+        Thread.sleep(2000);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(1)).keepState(true))).isTrue();
+        assertThat(rr.availablePermits()).isEqualTo(10);
+    }
+
+    @Test
+    public void testUpdateRateModeChangeClearsState() {
+        String name = "testUpdateRateModeChangeClearsState";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true));
+
+        rr.acquire(4);
+        assertThat(rr.availablePermits()).isEqualTo(6);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.PER_CLIENT, 10, Duration.ofSeconds(5)).keepState(true))).isTrue();
+        assertThat(rr.availablePermits()).isEqualTo(10);
+    }
+
+    @Test
+    public void testUpdateRateKeepAliveTimeLessThanIntervalThrows() {
+        String name = "testUpdateRateKeepAliveTimeLessThanIntervalThrows";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+
+        assertThatThrownBy(() -> rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5))
+                .keepState(true)
+                .keepAliveTime(Duration.ofSeconds(1))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    public void testUpdateRateRateIntervalChangeDropsExpired() throws InterruptedException {
+        String name = "testUpdateRateRateIntervalChangeDropsExpired";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true));
+
+        rr.acquire(3);
+        assertThat(rr.availablePermits()).isEqualTo(7);
+
+        Thread.sleep(1100);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(1)).keepState(true))).isTrue();
+        assertThat(rr.availablePermits()).isEqualTo(10);
+    }
+
+    @Test
+    public void testUpdateRatePerClientUsesClientState() {
+        String name = "testUpdateRatePerClientUsesClientState";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+        rr.setRate(RateLimiterArgs.of(RateType.PER_CLIENT, 10, Duration.ofSeconds(5)).keepState(true));
+
+        rr.acquire(3);
+        assertThat(rr.availablePermits()).isEqualTo(7);
+
+        assertThat(rr.updateRate(RateLimiterArgs.of(RateType.PER_CLIENT, 20, Duration.ofSeconds(5)).keepState(true))).isTrue();
+        assertThat(rr.availablePermits()).isEqualTo(17);
     }
 
     @Test
