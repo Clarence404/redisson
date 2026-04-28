@@ -9,7 +9,10 @@ import io.netty.handler.codec.dns.*;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SimpleDnsServer {
 
@@ -17,12 +20,23 @@ public class SimpleDnsServer {
     private final Channel channel;
     private String ip = "127.0.0.1";
     private final int port;
+    private final List<String> rotation;
+    private final AtomicInteger rotationIndex = new AtomicInteger();
 
     public SimpleDnsServer() throws InterruptedException {
-        this(ThreadLocalRandom.current().nextInt(49152, 65535));
+        this(ThreadLocalRandom.current().nextInt(49152, 65535), Collections.emptyList());
     }
 
     public SimpleDnsServer(int port) throws InterruptedException {
+        this(port, Collections.emptyList());
+    }
+
+    public SimpleDnsServer(List<String> rotationIPs) throws InterruptedException {
+        this(ThreadLocalRandom.current().nextInt(49152, 65535), rotationIPs);
+    }
+
+    private SimpleDnsServer(int port, List<String> rotation) throws InterruptedException {
+        this.rotation = rotation;
         Bootstrap bootstrap = new Bootstrap();
         bootstrap.group(group)
                 .channel(NioDatagramChannel.class)
@@ -59,10 +73,18 @@ public class SimpleDnsServer {
             DefaultDnsQuestion question = query.recordAt(DnsSection.QUESTION);
             String requestedDomain = question.name();
 
+            String answerIp;
+            if (rotation.isEmpty()) {
+                answerIp = ip;
+            } else {
+                int idx = Math.floorMod(rotationIndex.getAndIncrement(), rotation.size());
+                answerIp = rotation.get(idx);
+            }
+
             DatagramDnsResponse response = new DatagramDnsResponse(query.recipient(), query.sender(), query.id());
             response.addRecord(DnsSection.QUESTION, question);
             response.addRecord(DnsSection.ANSWER, new DefaultDnsRawRecord(question.name(), DnsRecordType.A, 0,
-                    Unpooled.wrappedBuffer(InetAddress.getByName(ip).getAddress()))); // Example IP
+                    Unpooled.wrappedBuffer(InetAddress.getByName(answerIp).getAddress()))); // Example IP
 
             ctx.writeAndFlush(response);
         }
