@@ -336,36 +336,27 @@ public class RedissonRateLimiterTest extends RedisDockerTest {
         assertThat(rr.getConfig().getRate()).isEqualTo(10);
         //check value in Redis
         rr.acquire(1);
-        String valueKey = redisson.getKeys().getKeysStream().filter(k -> k.contains("value:")).findAny().get();
-        Long value = redisson.getAtomicLong(valueKey).get();
-        assertThat(value).isEqualTo(9);
+        assertThat(rr.availablePermits()).isEqualTo(9);
 
         //change to 20/s
         rr.setRate(RateType.PER_CLIENT, 20, 1, RateIntervalUnit.SECONDS);
         assertThat(rr.getConfig().getRate()).isEqualTo(20);
         //check value in Redis
         rr.acquire(1);
-        value = redisson.getAtomicLong(valueKey).get();
-        assertThat(value).isEqualTo(19);
+        assertThat(rr.availablePermits()).isEqualTo(19);
 
         /* Test case -- OVERALL */
         rr.setRate(RateType.OVERALL, 10, 1, RateIntervalUnit.SECONDS);
         assertThat(rr.getConfig().getRate()).isEqualTo(10);
         //check value in Redis
         rr.acquire(1);
-        valueKey = redisson.getKeys().getKeysStream().filter(k -> k.endsWith("value")).findAny().get();
-        value = redisson.getAtomicLong(valueKey).get();
-        assertThat(value).isEqualTo(9);
+        assertThat(rr.availablePermits()).isEqualTo(9);
 
         rr.setRate(RateType.OVERALL, 20, 1, RateIntervalUnit.SECONDS);
         assertThat(rr.getConfig().getRate()).isEqualTo(20);
         //check value in Redis
         rr.acquire(1);
-        value = redisson.getAtomicLong(valueKey).get();
-        assertThat(value).isEqualTo(19);
-
-        //clean all keys in test
-        redisson.getKeys().deleteByPattern("*test_change_rate*");
+        assertThat(rr.availablePermits()).isEqualTo(19);
     }
 
     @Test
@@ -614,8 +605,5 @@ public class RedissonRateLimiterTest extends RedisDockerTest {
 
         // release -1
         assertThatThrownBy(() -> rateLimiter.release(-1)).isInstanceOf(IllegalArgumentException.class);
-
-        // clean
-        redisson.getKeys().deleteByPattern("*test_release*");
     }
 }
