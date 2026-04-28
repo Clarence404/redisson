@@ -419,6 +419,17 @@ public final class RedissonRateLimiter extends RedissonExpirable implements RRat
     }
 
     @Override
+    public void setRate(RateLimiterArgs args) {
+        get(setRateAsync(args));
+    }
+
+    @Override
+    public RFuture<Void> setRateAsync(RateLimiterArgs args) {
+        CompletionStage<Void> f = updateRateAsync(args).thenApply(r -> null);
+        return new CompletableFutureWrapper<>(f);
+    }
+
+    @Override
     public boolean updateRate(RateLimiterArgs args) {
         return get(updateRateAsync(args));
     }

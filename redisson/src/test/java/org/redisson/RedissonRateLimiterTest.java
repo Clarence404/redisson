@@ -369,6 +369,21 @@ public class RedissonRateLimiterTest extends RedisDockerTest {
     }
 
     @Test
+    public void testSetStateArgs() {
+        String name = "testSetStateArgs";
+        RRateLimiter rr = redisson.getRateLimiter(name);
+
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 10, Duration.ofSeconds(5)).keepState(true));
+        rr.acquire(3);
+        assertThat(rr.availablePermits()).isEqualTo(7);
+
+        rr.setRate(RateLimiterArgs.of(RateType.OVERALL, 20, Duration.ofSeconds(5)).keepState(true));
+        assertThat(rr.availablePermits()).isEqualTo(17);
+
+        redisson.getKeys().deleteByPattern("*" + name + "*");
+    }
+
+    @Test
     public void testUpdateRateKeepsState() {
         String name = "testUpdateRateKeepsState";
         RRateLimiter rr = redisson.getRateLimiter(name);

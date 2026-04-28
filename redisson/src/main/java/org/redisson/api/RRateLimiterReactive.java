@@ -67,7 +67,7 @@ public interface RRateLimiterReactive extends RExpirableReactive {
     Mono<Boolean> trySetRate(RateType mode, long rate, Duration rateInterval, Duration keepAliveTime);
 
     /**
-     * Use {@link #setRate(RateType, long, Duration)} instead.
+     * Use {@link #setRate(RateLimiterArgs)} instead
      *
      * @param mode rate mode
      * @param rate rate
@@ -79,7 +79,7 @@ public interface RRateLimiterReactive extends RExpirableReactive {
     Mono<Void> setRate(RateType mode, long rate, long rateInterval, RateIntervalUnit rateIntervalUnit);
 
     /**
-     * Updates the rate limit
+     * Updates the rate limit, either resetting the current state or keeping it.
      * <p>
      * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
      *
@@ -89,6 +89,8 @@ public interface RRateLimiterReactive extends RExpirableReactive {
     Mono<Boolean> updateRate(RateLimiterArgs args);
 
     /**
+     * Use {@link #setRate(RateLimiterArgs)} instead
+     * 
      * Sets the rate limit and clears the state.
      * Overrides both limit and state if they haven't been set before.
      *
@@ -96,7 +98,17 @@ public interface RRateLimiterReactive extends RExpirableReactive {
      * @param rate rate
      * @param rateInterval rate time interval
      */
+    @Deprecated
     Mono<Void> setRate(RateType mode, long rate, Duration rateInterval);
+
+    /**
+     * Sets the rate limit, either resetting the current state or keeping it.
+     * <p>
+     * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
+     *
+     * @param args arguments object
+     */
+    Mono<Void> setRate(RateLimiterArgs args);
 
     /**
      * Sets time to live, the rate limit, and clears the state.
