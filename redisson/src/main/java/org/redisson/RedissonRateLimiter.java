@@ -425,7 +425,7 @@ public final class RedissonRateLimiter extends RedissonExpirable implements RRat
 
     @Override
     public RFuture<Void> setRateAsync(RateLimiterArgs args) {
-        CompletionStage<Void> f = updateRateAsync(args).thenApply(r -> null);
+        CompletionStage<Void> f = setOrUpdateAsync(args, false).thenApply(r -> null);
         return new CompletableFutureWrapper<>(f);
     }
 
@@ -436,6 +436,10 @@ public final class RedissonRateLimiter extends RedissonExpirable implements RRat
 
     @Override
     public RFuture<Boolean> updateRateAsync(RateLimiterArgs args) {
+        return setOrUpdateAsync(args, true);
+    }
+
+    private RFuture<Boolean> setOrUpdateAsync(RateLimiterArgs args, boolean requireExist) {
         RateLimiterParams params = (RateLimiterParams) args;
 
         if (!params.getKeepAliveTime().isZero() && params.getKeepAliveTime().toMillis() < params.getRateInterval().toMillis()) {
@@ -447,8 +451,16 @@ public final class RedissonRateLimiter extends RedissonExpirable implements RRat
             keepState = 1;
         }
 
+        long requireExistLong = 0;
+        if (requireExist) {
+            requireExistLong = 1;
+        }
+
         return commandExecutor.evalWriteAsync(getRawName(), LongCodec.INSTANCE, RedisCommands.EVAL_BOOLEAN,
-                "local valueName = KEYS[2];"
+                "if ARGV[7] == '1' and redis.call('exists', KEYS[1]) == 0 then "
+              + "    return 0;"
+              + "end; "
+              + "local valueName = KEYS[2];"
               + "local permitsName = KEYS[4];"
               + "if ARGV[3] == '1' then "
                   + "valueName = KEYS[3];"
@@ -514,7 +526,7 @@ public final class RedissonRateLimiter extends RedissonExpirable implements RRat
               + "return 1;",
                 Arrays.asList(getRawName(), getValueName(), getClientValueName(), getPermitsName(), getClientPermitsName()),
                 params.getRate(), params.getRateInterval().toMillis(), params.getMode().ordinal(), params.getKeepAliveTime().toMillis(),
-                System.currentTimeMillis(), keepState);
+                System.currentTimeMillis(), keepState, requireExistLong);
     }
 
     private static final RedisCommand HGETALL = new RedisCommand("HGETALL", new MapEntriesDecoder(new MultiDecoder<RateLimiterConfig>() {

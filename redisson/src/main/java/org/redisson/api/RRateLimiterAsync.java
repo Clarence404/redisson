@@ -223,7 +223,7 @@ public interface RRateLimiterAsync extends RExpirableAsync {
      * Use {@link RateLimiterArgs#of(RateType, long, Duration)} to construct arguments.
      *
      * @param args arguments object
-     * @return {@code true} if update was applied
+     * @return {@code false} if the rate limiter has not been set or expired, {@code true} otherwise
      */
     RFuture<Boolean> updateRateAsync(RateLimiterArgs args);
 
