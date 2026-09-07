@@ -82,6 +82,7 @@ public class ZStdCodec extends BaseCodec {
 
     private final Encoder encoder = new Encoder() {
         @Override
+        @SuppressWarnings("NestedTryDepth")
         public ByteBuf encode(Object in) throws IOException {
             ByteBuf encoded = innerCodec.getValueEncoder().encode(in);
             try {
