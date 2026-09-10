@@ -1013,3 +1013,7 @@ Redisson implements `RedisConnectionFactory` and `ReactiveRedisConnectionFactory
    ```
 
 {% include 'spring-ai-vector-store.md' %}
+
+{% include 'spring-ai-chat-memory.md' %}
+
+{% include 'spring-ai-semantic-cache.md' %}

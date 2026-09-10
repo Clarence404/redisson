@@ -1611,8 +1611,7 @@ transportMode: "NIO"
 
 ## License key configuration
 
-License keys are required only for Redisson PRO. Redisson Community Edition 
-does not require a license key.
+License key is required only for Redisson PRO. It can be requested via [trial form](/trial.html). Redisson Community Edition does not require a license key.
 
 You can configure your license key using any of the following methods. 
 
